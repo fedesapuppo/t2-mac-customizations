@@ -108,44 +108,9 @@ if ask "Install custom fan curve config?" "y"; then
     track "Installed custom fan curve config"
 fi
 
-# --- Step 2: Webcam (FaceTime HD) ---
+# --- Step 2: Power profile switching ---
 
-step 2 "FaceTime HD webcam driver" \
-    "The built-in webcam needs a reverse-engineered driver and Apple's\n  firmware blobs. This installs the DKMS module, firmware files, and\n  adds the kernel module to load at boot."
-
-if ask "Install facetimehd (webcam)?" "y"; then
-    install_pkg facetimehd-firmware
-    install_pkg facetimehd-data
-    install_pkg facetimehd-dkms
-    copy_config "$SCRIPT_DIR/etc/modules-load.d/facetimehd.conf" "/etc/modules-load.d/facetimehd.conf"
-    NEED_INITRAMFS=true
-    track "Installed facetimehd webcam driver"
-fi
-
-# --- Step 3: Systemd configs ---
-
-step 3 "Configure systemd (faster shutdown + power key)" \
-    "Two tweaks:\n  - Reduces shutdown timeout from 90s to 5s (T2 drivers sometimes hang)\n  - Disables the power key to prevent accidental suspend (suspend is\n    broken on T2 Macs — waking often results in a black screen)"
-
-if ask "Install systemd configs?" "y"; then
-    copy_config "$SCRIPT_DIR/etc/systemd/system.conf.d/10-faster-shutdown.conf" "/etc/systemd/system.conf.d/10-faster-shutdown.conf"
-
-    # Disable power key in logind.conf
-    if grep -q "^HandlePowerKey=ignore" /etc/systemd/logind.conf; then
-        info "Power key already disabled"
-    elif grep -q "^#\?HandlePowerKey=" /etc/systemd/logind.conf; then
-        sudo sed -i 's/^#\?HandlePowerKey=.*/HandlePowerKey=ignore/' /etc/systemd/logind.conf
-        info "Set HandlePowerKey=ignore in logind.conf"
-    else
-        echo "HandlePowerKey=ignore" | sudo tee -a /etc/systemd/logind.conf > /dev/null
-        info "Added HandlePowerKey=ignore to logind.conf"
-    fi
-    track "Installed systemd configs (faster shutdown + power key disabled)"
-fi
-
-# --- Step 4: Power profile switching ---
-
-step 4 "Auto power profile (performance on AC, power-saver on battery)" \
+step 2 "Auto power profile (performance on AC, power-saver on battery)" \
     "Installs power-profiles-daemon and a script + udev rule that\n  automatically switches profiles when you plug/unplug AC.\n  Also plays a sound on plug/unplug and sets the right profile at boot."
 
 if ask "Install power profile auto-switching?" "y"; then
@@ -160,21 +125,22 @@ if ask "Install power profile auto-switching?" "y"; then
     sudo chmod +x "/usr/local/bin/power-config.sh"
     rm -f "$tmp"
 
-    copy_config "$SCRIPT_DIR/etc/udev/rules.d/95-power-config.rules" "/etc/udev/rules.d/95-power-config.rules"
+    copy_config "$SCRIPT_DIR/etc/udev/rules.d/99-power-profile.rules" "/etc/udev/rules.d/99-power-profile.rules"
     copy_config "$SCRIPT_DIR/etc/systemd/system/power-profile-boot.service" "/etc/systemd/system/power-profile-boot.service"
     sudo systemctl enable power-profile-boot.service
     sudo udevadm control --reload-rules
     track "Installed power profile auto-switching"
 fi
 
-# --- Step 5: WiFi resume + powersave ---
+# --- Step 3: WiFi resume + powersave ---
 
-step 5 "WiFi resume hook + powersave switching" \
+step 3 "WiFi resume hook + powersave switching" \
     "Two fixes:\n  - Resume hook: reloads the Broadcom WiFi driver after waking from\n    suspend (the driver loses connection state and silently fails)\n  - Powersave rule: enables WiFi power save on battery, disables on AC\n    (saves battery but reduces latency when plugged in)"
 
 if ask "Install WiFi resume hook + powersave rules?" "y"; then
-    copy_config "$SCRIPT_DIR/usr/lib/systemd/system-sleep/wifi-resume" "/usr/lib/systemd/system-sleep/wifi-resume"
-    sudo chmod +x "/usr/lib/systemd/system-sleep/wifi-resume"
+    sudo mkdir -p /etc/systemd/system-sleep
+    copy_config "$SCRIPT_DIR/etc/systemd/system-sleep/wifi-resume" "/etc/systemd/system-sleep/wifi-resume"
+    sudo chmod +x "/etc/systemd/system-sleep/wifi-resume"
 
     # Generate wifi powersave rule with correct username
     tmp=$(mktemp)
@@ -186,9 +152,9 @@ if ask "Install WiFi resume hook + powersave rules?" "y"; then
     track "Installed WiFi resume hook + powersave rules"
 fi
 
-# --- Step 6: Keyboard backlight ---
+# --- Step 4: Keyboard backlight ---
 
-step 6 "Keyboard backlight step size" \
+step 4 "Keyboard backlight step size" \
     "The T2 MacBook has 512 backlight levels. Omarchy's default script\n  changes brightness by 1 unit per keypress (~0.2% — invisible).\n  This override steps by a percentage of max brightness."
 
 if ask "Install keyboard backlight override?" "y"; then
@@ -227,9 +193,9 @@ if ask "Install keyboard backlight override?" "y"; then
     track "Installed keyboard backlight override ($pct steps)"
 fi
 
-# --- Step 7: Orca + Piper TTS ---
+# --- Step 5: Orca + Piper TTS ---
 
-step 7 "Screen reader with natural voice (Orca + Piper TTS)" \
+step 5 "Screen reader with natural voice (Orca + Piper TTS)" \
     "Orca is a screen reader for accessibility. Omarchy does not include\n  one by default. If you need a screen reader, this installs Orca with\n  Piper TTS — a neural text-to-speech engine that sounds natural instead\n  of the default robotic espeak-ng voice."
 
 if ask "Install Orca + Piper TTS (screen reader)?" "n"; then
@@ -257,10 +223,10 @@ if ask "Install Orca + Piper TTS (screen reader)?" "n"; then
     track "Installed Orca + Piper TTS + F3 toggle keybinding"
 fi
 
-# --- Step 8: Rebuild initramfs ---
+# --- Step 6: Rebuild initramfs ---
 
 if $NEED_INITRAMFS; then
-    step 8 "Rebuild initramfs" \
+    step 6 "Rebuild initramfs" \
         "Kernel module configs changed. The initramfs needs to be rebuilt\n  so the new modules are available at early boot."
 
     if ask "Rebuild initramfs now? (required for changes to take effect)" "y"; then
