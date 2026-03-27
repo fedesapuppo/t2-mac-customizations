@@ -13,8 +13,10 @@ Thanks for your interest in improving the T2 Mac + Omarchy experience. This repo
 
 ### Config improvements
 - Fixes or refinements to existing config files
-- New config files that solve T2-specific issues
+- New config files that solve T2-specific issues not already handled by Omarchy upstream
 - Corrections to documentation or outdated information
+
+Before submitting, check whether [Omarchy's T2 support](https://github.com/basecamp/omarchy/blob/master/install/config/hardware/apple/fix-t2.sh) already handles it.
 
 ### The big one: suspend/wake
 

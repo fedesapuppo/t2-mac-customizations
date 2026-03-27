@@ -1,8 +1,23 @@
-# T2 MacBook Omarchy Setup & Customizations
+# T2 MacBook Extra Customizations for Omarchy
 
-Configuration files and customizations for running [Omarchy](https://github.com/basecamp/omarchy) (Arch Linux) on a MacBook Air with T2 chip.
+Additional tweaks and configurations for running [Omarchy](https://github.com/basecamp/omarchy) on a MacBook with T2 chip — beyond what Omarchy ships out of the box.
 
 > **Warning — Suspend/Wake is broken.** T2 Macs only support `s2idle` (no S3 deep sleep). Waking from suspend frequently results in a black screen with an unresponsive keyboard, requiring a hard reboot. This is a known issue with no reliable fix — see [Open Issues](#open-issues) for details. If you rely on suspend, be aware that **you may lose unsaved work**.
+
+## Prerequisites
+
+Omarchy's installer auto-detects T2 hardware and handles the basics:
+- T2 kernel (`linux-t2`) + headers
+- `apple-bce` driver (keyboard, trackpad, storage)
+- WiFi/Bluetooth firmware (`apple-bcm-firmware`)
+- Audio routing (`apple-t2-audio-config`)
+- Fan daemon (`t2fanrd`) with default config
+- Boot parameters (`intel_iommu=on iommu=pt pcie_ports=compat`)
+- Kernel module configs (initramfs, modprobe, modules-load)
+- F-key behavior (`hid_apple fnmode=2`)
+- USB autosuspend disable
+
+**Install Omarchy first**, then run this setup for the extras.
 
 ## Quick Start
 
@@ -14,83 +29,42 @@ bash setup.sh
 
 The setup script walks you through every step interactively — it explains what each component does, asks before installing anything, and lets you skip what you don't need. Safe to re-run.
 
-## System Info
-- **Kernel**: `linux-t2` (6.18.13-arch1-Watanare-T2-1-t2)
-- **Boot Loader**: Limine
-- **Model**: MacBook Air with T2 chip
+## What This Repo Adds
 
-## Packages
+### Custom Fan Curve
 
-- `linux-t2` + `linux-t2-headers` — patched kernel with T2 chip support (mainline Linux has no T2 drivers)
-- `apple-bce` — T2 chip driver: keyboard, trackpad, audio, and SSD are all routed through the T2's internal USB/PCIe bus. Without this module, none of those devices appear to the kernel.
-- `apple-bcm-firmware` — WiFi/Bluetooth firmware for the Broadcom BCM4364 chip inside the T2
-- `apple-t2-audio-config` — UCM profiles that tell PipeWire/ALSA how to route audio through the T2's internal codec
-- `t2fanrd` — fan control daemon (macOS firmware normally manages fans; under Linux there is no built-in fan management)
-- `facetimehd-firmware`, `facetimehd-data`, `facetimehd-dkms` — FaceTime HD webcam driver and firmware
-- `power-profiles-daemon` — enables switching between `performance` and `power-saver` profiles
-- `orca` — screen reader (not included in Omarchy, installed separately) + Piper TTS (natural voice, installed via setup script)
-- Custom repo: `[arch-mact2]` in `/etc/pacman.conf` — configured with `SigLevel = Never` (package signatures are not verified). This is standard for community T2 repos that don't maintain signing keys, but means you're trusting the mirror operator. Use a trusted network when syncing packages.
-
-## Configuration Files
-
-All config files mirror their system paths. Copy them to `/` to apply.
-
-### Boot Parameters
-
-- [`etc/limine-entry-tool.d/t2-mac.conf`](etc/limine-entry-tool.d/t2-mac.conf) — kernel command line: `intel_iommu=on iommu=pt pcie_ports=compat`
-  - `intel_iommu=on iommu=pt` — the T2 chip sits behind an IOMMU; without passthrough mode, internal devices (keyboard, trackpad, storage) can fail to initialize or work unreliably
-  - `pcie_ports=compat` — the T2's PCIe bridge doesn't fully support native hotplug signaling; compatibility mode prevents device enumeration failures at boot
-
-Additional boot params in `/boot/limine.conf`: `mem_sleep_default=s2idle` — T2 Macs lack ACPI S3 (deep sleep), so `s2idle` is the only suspend mode available. Setting it explicitly avoids the kernel attempting S3 and failing silently.
-
-### Kernel Modules
-
-- [`etc/mkinitcpio.conf.d/apple-t2.conf`](etc/mkinitcpio.conf.d/apple-t2.conf) — loads `apple-bce`, `usbhid`, `hid_apple`, `xhci_pci`, `xhci_hcd` in the initramfs. These must be available during early boot because the keyboard and trackpad are routed through the T2 chip's internal USB bus — without them, there's no input at the disk encryption prompt or recovery console.
-- [`etc/modules-load.d/apple-bce.conf`](etc/modules-load.d/apple-bce.conf) — auto-load `apple-bce`
-- [`etc/modules-load.d/facetimehd.conf`](etc/modules-load.d/facetimehd.conf) — auto-load `facetimehd` (webcam)
-
-### Modprobe Options
-
-- [`etc/modprobe.d/brcmfmac.conf`](etc/modprobe.d/brcmfmac.conf) — `feature_disable=0x82000` disables firmware features in the Broadcom WiFi driver that cause frequent disconnections and failed scans on the T2's BCM4364 chip. Without this flag, WiFi drops randomly or fails to connect after boot.
-- [`etc/modprobe.d/hid_apple.conf`](etc/modprobe.d/hid_apple.conf) — `fnmode=2` makes the top row behave as F1–F12 by default, requiring Fn to access media keys. The kernel default (`fnmode=1`) is the opposite, which doesn't match the standard Linux desktop expectation for function keys.
-- [`etc/modprobe.d/disable-usb-autosuspend.conf`](etc/modprobe.d/disable-usb-autosuspend.conf) — disables USB autosuspend (`autosuspend=-1`). The T2 routes the internal keyboard and trackpad over USB via `apple-bce`; with autosuspend enabled, the kernel suspends this bus after idle, causing the keyboard and trackpad to go unresponsive.
-
-### Fan Control
-
-The T2 chip normally manages fans through macOS firmware. Under Linux, there is no built-in fan management — without `t2fanrd`, fans may not spin up at all, risking thermal throttling or hardware damage.
+Omarchy installs `t2fanrd` with its default config. This repo provides a custom fan curve optimized for the MacBook Air.
 
 - [`etc/t2fand.conf`](etc/t2fand.conf) — linear fan curve from 55°C to 75°C. Fans stay off below 55°C and ramp linearly to full speed at 75°C.
-- Service: `t2fanrd.service` (enabled)
+
+### FaceTime HD Webcam
+
+Omarchy does not include webcam support for T2 Macs. This installs the reverse-engineered FaceTime HD driver and firmware.
+
+- Packages: `facetimehd-firmware`, `facetimehd-data`, `facetimehd-dkms`
+- [`etc/modules-load.d/facetimehd.conf`](etc/modules-load.d/facetimehd.conf) — auto-load `facetimehd` at boot
 
 ### Power Profiles (auto-switch on AC plug/unplug)
 
-Automatically switches to `performance` on AC and `power-saver` on battery. Also plays plug/unplug sounds. Without this, the system stays on whatever profile was last set manually — easy to forget and either waste battery on performance mode or run sluggishly on AC in power-saver.
+Automatically switches to `performance` on AC and `power-saver` on battery. Also plays plug/unplug sounds. Without this, the system stays on whatever profile was last set manually.
 
 - [`usr/local/bin/power-config.sh`](usr/local/bin/power-config.sh) — main script (profile switch + sound)
 - [`etc/udev/rules.d/95-power-config.rules`](etc/udev/rules.d/95-power-config.rules) — udev rule triggers script on power supply change
 - [`etc/systemd/system/power-profile-boot.service`](etc/systemd/system/power-profile-boot.service) — systemd service sets correct profile at boot
 
-### Power/Suspend
+### Power/Suspend Workarounds
 
-- `HandlePowerKey=ignore` in `/etc/systemd/logind.conf` — since suspend is broken on T2 Macs (see [Open Issues](#open-issues)), the power key is disabled to avoid accidentally triggering a suspend that results in a black screen requiring a hard reboot.
-- [`etc/systemd/system.conf.d/10-faster-shutdown.conf`](etc/systemd/system.conf.d/10-faster-shutdown.conf) — reduces `DefaultTimeoutStopSec` from 90s to 5s. If a service hangs during shutdown (which T2 drivers occasionally do), the system force-kills it after 5 seconds instead of waiting a minute and a half.
+- `HandlePowerKey=ignore` in `/etc/systemd/logind.conf` — since suspend is broken on T2 Macs, the power key is disabled to avoid accidentally triggering a suspend that results in a black screen.
+- [`etc/systemd/system.conf.d/10-faster-shutdown.conf`](etc/systemd/system.conf.d/10-faster-shutdown.conf) — reduces `DefaultTimeoutStopSec` from 90s to 5s. T2 drivers occasionally hang during shutdown.
 
 ### WiFi
 
-- [`etc/udev/rules.d/99-wifi-powersave.rules`](etc/udev/rules.d/99-wifi-powersave.rules) — toggles WiFi power save based on AC state: enabled on battery to extend battery life, disabled on AC for lower latency and fewer dropouts. Update the username in the path before using.
-- [`usr/lib/systemd/system-sleep/wifi-resume`](usr/lib/systemd/system-sleep/wifi-resume) — reloads `brcmfmac` after resume. The Broadcom driver loses its connection state through suspend on T2 Macs; without a full module reload, WiFi silently fails to reconnect after waking.
-
-### Active Kernel Modules
-
-`applesmc`, `apple_mfi_fastcharge`, `mac_hid`, `hid_magicmouse`, `hid_apple`, `apple_bce`, `facetimehd`
-
----
-
-## Omarchy Customizations
+- [`etc/udev/rules.d/99-wifi-powersave.rules`](etc/udev/rules.d/99-wifi-powersave.rules) — toggles WiFi power save based on AC state: enabled on battery, disabled on AC. Update the username in the path before using.
+- [`usr/lib/systemd/system-sleep/wifi-resume`](usr/lib/systemd/system-sleep/wifi-resume) — reloads `brcmfmac` after resume. The Broadcom driver loses its connection state through suspend on T2 Macs.
 
 ### Keyboard Backlight Step Size
 
-The T2 MacBook Air has 512 brightness levels for keyboard backlight (`apple::kbd_backlight`). Omarchy's default script (`omarchy-brightness-keyboard`) steps by 1 unit, assuming keyboards have only 3-4 discrete levels. Each keystroke changes brightness by ~0.2%.
+The T2 MacBook Air has 512 brightness levels for keyboard backlight (`apple::kbd_backlight`). Omarchy's default script steps by 1 unit (~0.2% — invisible).
 
 - [`usr/local/bin/omarchy-brightness-keyboard`](usr/local/bin/omarchy-brightness-keyboard) — replacement script that steps by 10% of max brightness
 
@@ -145,26 +119,29 @@ bindd = , XF86LaunchA, Toggle Orca screen reader, exec, omarchy-toggle-orca
 
 ---
 
-## Cross-Reference with GitHub Issues
+## Cross-Reference with Upstream
 
 Sources:
 - https://github.com/basecamp/omarchy/discussions/773
 - https://github.com/basecamp/omarchy/issues/3883
 
-| Suggestion | Status |
+| Feature | Status |
 |---|---|
-| T2 kernel + `apple-bce` | Done |
-| `apple-bcm-firmware` for WiFi | Done |
-| `hid_apple` + `usbhid` in mkinitcpio | Done |
-| `pcie_ports=compat` boot param | Done |
-| `intel_iommu=on iommu=pt` | Done |
-| `brcmfmac feature_disable=0x82000` | Done |
-| Fan daemon (`t2fanrd`) | Done |
-| Webcam via `facetimehd` driver | Done |
-| WiFi resume hook (reload `brcmfmac` after suspend) | Done |
-| Keyboard backlight 10% step size | Done |
-| Auto power profile (performance/power-saver) | Done (udev + systemd) |
-| Natural voice screen reader (Orca + Piper TTS) | Done |
+| T2 kernel + `apple-bce` | Handled by Omarchy |
+| `apple-bcm-firmware` for WiFi | Handled by Omarchy |
+| `hid_apple` + `usbhid` in mkinitcpio | Handled by Omarchy |
+| `pcie_ports=compat` boot param | Handled by Omarchy |
+| `intel_iommu=on iommu=pt` | Handled by Omarchy |
+| `brcmfmac feature_disable=0x82000` | Handled by Omarchy |
+| F-key behavior (`fnmode=2`) | Handled by Omarchy |
+| USB autosuspend disable | Handled by Omarchy |
+| Fan daemon (`t2fanrd`) | Handled by Omarchy (default config) |
+| Custom fan curve | Done (this repo) |
+| Webcam via `facetimehd` driver | Done (this repo) |
+| WiFi resume hook (reload `brcmfmac` after suspend) | Done (this repo) |
+| Keyboard backlight 10% step size | Done (this repo) |
+| Auto power profile (performance/power-saver) | Done (this repo) |
+| Natural voice screen reader (Orca + Piper TTS) | Done (this repo) |
 | Suspend/wake black screen fix | **Not solved** (open issue) |
 
 ## Open Issues
