@@ -1,0 +1,4 @@
+# Replace <your-username> with your actual username before deploying manually.
+# The setup script handles this substitution automatically.
+SUBSYSTEM=="power_supply", ATTR{type}=="Mains", ATTR{online}=="0", RUN+="/home/<your-username>/.local/share/omarchy/bin/omarchy-wifi-powersave on"
+SUBSYSTEM=="power_supply", ATTR{type}=="Mains", ATTR{online}=="1", RUN+="/home/<your-username>/.local/share/omarchy/bin/omarchy-wifi-powersave off"
