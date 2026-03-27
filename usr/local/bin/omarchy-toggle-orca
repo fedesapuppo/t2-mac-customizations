@@ -1,0 +1,6 @@
+#!/bin/bash
+if pgrep -x orca >/dev/null; then
+    orca --quit 2>/dev/null || killall orca
+else
+    orca &
+fi

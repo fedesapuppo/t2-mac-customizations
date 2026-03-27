@@ -129,9 +129,18 @@ After setup, Orca will automatically use the natural piper voice. Test manually 
 spd-say -o piper-tts "hello world"
 ```
 
+### Fn+F3 toggle keybinding
+
+Press **Fn+F3** to start Orca, press **Fn+F3** again to quit it. On T2 MacBooks, Fn+F3 sends `XF86LaunchA` (the Mission Control key). The setup script adds this binding to Hyprland automatically. To add it manually, append to `~/.config/hypr/bindings.conf`:
+
+```
+bindd = , XF86LaunchA, Toggle Orca screen reader, exec, omarchy-toggle-orca
+```
+
 ### Config files
 
 - [`usr/local/bin/setup-orca-piper.sh`](usr/local/bin/setup-orca-piper.sh) — setup script (idempotent, safe to re-run)
+- [`usr/local/bin/omarchy-toggle-orca`](usr/local/bin/omarchy-toggle-orca) — toggle script: starts Orca if not running, quits it if running
 - [`etc/speech-dispatcher/modules/piper-tts.conf`](etc/speech-dispatcher/modules/piper-tts.conf) — speech-dispatcher module config (reference — the setup script generates a user-specific version with resolved paths)
 
 ---
