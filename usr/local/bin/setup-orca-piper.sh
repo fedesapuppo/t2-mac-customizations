@@ -58,13 +58,14 @@ fi
 # Verify piper works
 info "Testing piper binary..."
 export LD_LIBRARY_PATH="$PIPER_LIB"
-echo "test" | "$PIPER_BIN" --model "$PIPER_VOICES/${VOICE_NAME}.onnx" --output_file /dev/null 2>/dev/null \
+echo "test" | "$PIPER_BIN" --model "$PIPER_VOICES/${VOICE_NAME}.onnx" --output_file /dev/null >/dev/null 2>&1 \
     || fail "piper-tts binary failed. Check library dependencies."
 
 # Create speech-dispatcher module config (requires sudo)
 info "Configuring speech-dispatcher (requires sudo)..."
 
-sudo tee "$SPEECHD_MODULES/piper-tts.conf" > /dev/null << CONF
+tmp=$(mktemp)
+cat > "$tmp" << CONF
 Debug 0
 
 GenericExecuteSynth \\
@@ -84,6 +85,14 @@ GenericVolumeAdd 0
 AddVoice "en" "FEMALE1" "${VOICE_NAME}"
 DefaultVoice "${VOICE_NAME}"
 CONF
+
+if [[ -f "$SPEECHD_MODULES/piper-tts.conf" ]] && diff -q "$tmp" "$SPEECHD_MODULES/piper-tts.conf" &>/dev/null; then
+    info "piper-tts.conf already in place, skipping"
+else
+    sudo cp "$tmp" "$SPEECHD_MODULES/piper-tts.conf"
+    info "Installed piper-tts.conf"
+fi
+rm -f "$tmp"
 
 # Register module in speechd.conf if not already present
 if ! grep -q 'AddModule "piper-tts"' "$SPEECHD_CONF"; then

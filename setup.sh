@@ -25,7 +25,7 @@ step() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     bold "  Step $1: $2"
     echo ""
-    echo "  $3"
+    echo -e "  $3"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -79,11 +79,11 @@ track() {
 # --- Pre-flight checks ---
 
 echo ""
-echo "  ┌──────────────────────────────────────────────────┐"
+echo "  ┌───────────────────────────────────────────────────┐"
 echo "  │  T2 MacBook Extra Customizations                  │"
 echo "  │  Additional tweaks beyond Omarchy's built-in T2   │"
 echo "  │  support (kernel, drivers, boot params, etc.)     │"
-echo "  └──────────────────────────────────────────────────┘"
+echo "  └───────────────────────────────────────────────────┘"
 echo ""
 info "User: $TARGET_USER ($TARGET_HOME, UID $TARGET_UID)"
 
@@ -154,10 +154,11 @@ if ask "Install power profile auto-switching?" "y"; then
     sudo systemctl start power-profiles-daemon.service
 
     # Install power-config script with correct UID
-    sudo cp "$SCRIPT_DIR/usr/local/bin/power-config.sh" "/usr/local/bin/power-config.sh"
-    sudo sed -i "s/^UID_TARGET=.*/UID_TARGET=$TARGET_UID/" "/usr/local/bin/power-config.sh"
+    tmp=$(mktemp)
+    sed "s/^UID_TARGET=.*/UID_TARGET=$TARGET_UID/" "$SCRIPT_DIR/usr/local/bin/power-config.sh" > "$tmp"
+    copy_config "$tmp" "/usr/local/bin/power-config.sh"
     sudo chmod +x "/usr/local/bin/power-config.sh"
-    info "Installed power-config.sh (UID=$TARGET_UID)"
+    rm -f "$tmp"
 
     copy_config "$SCRIPT_DIR/etc/udev/rules.d/95-power-config.rules" "/etc/udev/rules.d/95-power-config.rules"
     copy_config "$SCRIPT_DIR/etc/systemd/system/power-profile-boot.service" "/etc/systemd/system/power-profile-boot.service"
@@ -172,16 +173,15 @@ step 5 "WiFi resume hook + powersave switching" \
     "Two fixes:\n  - Resume hook: reloads the Broadcom WiFi driver after waking from\n    suspend (the driver loses connection state and silently fails)\n  - Powersave rule: enables WiFi power save on battery, disables on AC\n    (saves battery but reduces latency when plugged in)"
 
 if ask "Install WiFi resume hook + powersave rules?" "y"; then
-    sudo cp "$SCRIPT_DIR/usr/lib/systemd/system-sleep/wifi-resume" "/usr/lib/systemd/system-sleep/wifi-resume"
+    copy_config "$SCRIPT_DIR/usr/lib/systemd/system-sleep/wifi-resume" "/usr/lib/systemd/system-sleep/wifi-resume"
     sudo chmod +x "/usr/lib/systemd/system-sleep/wifi-resume"
-    info "Installed wifi-resume hook"
 
     # Generate wifi powersave rule with correct username
-    sudo mkdir -p /etc/udev/rules.d
+    tmp=$(mktemp)
     sed "s|/home/<your-username>/|/home/$TARGET_USER/|g" \
-        "$SCRIPT_DIR/etc/udev/rules.d/99-wifi-powersave.rules" \
-        | sudo tee /etc/udev/rules.d/99-wifi-powersave.rules > /dev/null
-    info "Installed wifi-powersave udev rule (user: $TARGET_USER)"
+        "$SCRIPT_DIR/etc/udev/rules.d/99-wifi-powersave.rules" > "$tmp"
+    copy_config "$tmp" "/etc/udev/rules.d/99-wifi-powersave.rules"
+    rm -f "$tmp"
     sudo udevadm control --reload-rules
     track "Installed WiFi resume hook + powersave rules"
 fi
@@ -209,10 +209,21 @@ if ask "Install keyboard backlight override?" "y"; then
 
     dest="$TARGET_HOME/.local/share/omarchy/bin/omarchy-brightness-keyboard"
     mkdir -p "$(dirname "$dest")"
+    tmp=$(mktemp)
     sed "s|^STEP_DIVISOR=.*|STEP_DIVISOR=$divisor|" \
-        "$SCRIPT_DIR/usr/local/bin/omarchy-brightness-keyboard" > "$dest"
-    chmod +x "$dest"
-    info "Installed keyboard backlight override ($pct steps)"
+        "$SCRIPT_DIR/usr/local/bin/omarchy-brightness-keyboard" > "$tmp"
+    if [[ -f "$dest" ]] && diff -q "$tmp" "$dest" &>/dev/null; then
+        info "omarchy-brightness-keyboard already in place, skipping"
+    else
+        if [[ -f "$dest" ]]; then
+            warn "omarchy-brightness-keyboard differs — overwriting (backup at ${dest}.bak)"
+            cp "$dest" "${dest}.bak"
+        fi
+        cp "$tmp" "$dest"
+        chmod +x "$dest"
+        info "Installed keyboard backlight override ($pct steps)"
+    fi
+    rm -f "$tmp"
     track "Installed keyboard backlight override ($pct steps)"
 fi
 
@@ -227,9 +238,8 @@ if ask "Install Orca + Piper TTS (screen reader)?" "n"; then
     bash "$SCRIPT_DIR/usr/local/bin/setup-orca-piper.sh"
 
     # Install toggle script and F3 keybinding
-    sudo cp "$SCRIPT_DIR/usr/local/bin/omarchy-toggle-orca" "/usr/local/bin/omarchy-toggle-orca"
+    copy_config "$SCRIPT_DIR/usr/local/bin/omarchy-toggle-orca" "/usr/local/bin/omarchy-toggle-orca"
     sudo chmod +x "/usr/local/bin/omarchy-toggle-orca"
-    info "Installed omarchy-toggle-orca"
 
     BINDINGS_FILE="$TARGET_HOME/.config/hypr/bindings.conf"
     if [[ -f "$BINDINGS_FILE" ]] && ! grep -q "omarchy-toggle-orca" "$BINDINGS_FILE"; then
@@ -254,10 +264,10 @@ if $NEED_INITRAMFS; then
         "Kernel module configs changed. The initramfs needs to be rebuilt\n  so the new modules are available at early boot."
 
     if ask "Rebuild initramfs now? (required for changes to take effect)" "y"; then
-        sudo mkinitcpio -P
+        sudo limine-mkinitcpio
         track "Rebuilt initramfs"
     else
-        warn "Skipped. Run 'sudo mkinitcpio -P' before rebooting!"
+        warn "Skipped. Run 'sudo limine-mkinitcpio' before rebooting!"
     fi
 fi
 
