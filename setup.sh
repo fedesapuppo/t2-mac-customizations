@@ -211,13 +211,13 @@ if ask "Install Orca + Piper TTS (screen reader)?" "n"; then
     if [[ -f "$BINDINGS_FILE" ]] && ! grep -q "omarchy-toggle-orca" "$BINDINGS_FILE"; then
         echo "" >> "$BINDINGS_FILE"
         echo "# Toggle Orca screen reader on/off" >> "$BINDINGS_FILE"
-        echo 'bindd = , XF86LaunchA, Toggle Orca screen reader, exec, omarchy-toggle-orca' >> "$BINDINGS_FILE"
-        info "Added Fn+F3 (XF86LaunchA) keybinding for Orca toggle"
+        echo 'bindd = , F3, Toggle Orca screen reader, exec, omarchy-toggle-orca' >> "$BINDINGS_FILE"
+        info "Added F3 keybinding for Orca toggle"
     elif grep -q "omarchy-toggle-orca" "$BINDINGS_FILE" 2>/dev/null; then
-        info "Fn+F3 Orca keybinding already configured"
+        info "F3 Orca keybinding already configured"
     else
         warn "Hyprland bindings file not found — add this line manually:"
-        warn "bindd = , XF86LaunchA, Toggle Orca screen reader, exec, omarchy-toggle-orca"
+        warn "bindd = , F3, Toggle Orca screen reader, exec, omarchy-toggle-orca"
     fi
 
     track "Installed Orca + Piper TTS + F3 toggle keybinding"

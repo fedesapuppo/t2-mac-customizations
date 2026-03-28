@@ -9,7 +9,7 @@ Additional tweaks and configurations for running [Omarchy](https://github.com/ba
 Omarchy's installer auto-detects T2 hardware and handles the basics:
 - T2 kernel (`linux-t2`) + headers
 - `apple-bce` driver (keyboard, trackpad, storage)
-- WiFi/Bluetooth firmware (`apple-bcm-firmware`)
+- WiFi/Bluetooth firmware (`apple-bcm-firmware`) + Bluetooth driver (`hci_bcm4377`)
 - Audio routing (`apple-t2-audio-config`)
 - Fan daemon (`t2fanrd`) with default config
 - Boot parameters (`intel_iommu=on iommu=pt pcie_ports=compat`)
@@ -37,13 +37,6 @@ Omarchy installs `t2fanrd` with its default config. This repo provides a custom 
 
 - [`etc/t2fand.conf`](etc/t2fand.conf) — linear fan curve from 55°C to 75°C. Fans stay off below 55°C and ramp linearly to full speed at 75°C.
 
-### FaceTime HD Webcam
-
-Omarchy does not include webcam support for T2 Macs. This installs the reverse-engineered FaceTime HD driver and firmware.
-
-- Packages: `facetimehd-firmware`, `facetimehd-data`, `facetimehd-dkms`
-- [`etc/modules-load.d/facetimehd.conf`](etc/modules-load.d/facetimehd.conf) — auto-load `facetimehd` at boot
-
 ### Power Profiles (auto-switch on AC plug/unplug)
 
 Automatically switches to `performance` on AC and `power-saver` on battery. Also plays plug/unplug sounds. Without this, the system stays on whatever profile was last set manually.
@@ -51,11 +44,6 @@ Automatically switches to `performance` on AC and `power-saver` on battery. Also
 - [`usr/local/bin/power-config.sh`](usr/local/bin/power-config.sh) — main script (profile switch + sound)
 - [`etc/udev/rules.d/95-power-config.rules`](etc/udev/rules.d/95-power-config.rules) — udev rule triggers script on power supply change
 - [`etc/systemd/system/power-profile-boot.service`](etc/systemd/system/power-profile-boot.service) — systemd service sets correct profile at boot
-
-### Power/Suspend Workarounds
-
-- `HandlePowerKey=ignore` in `/etc/systemd/logind.conf` — since suspend is broken on T2 Macs, the power key is disabled to avoid accidentally triggering a suspend that results in a black screen.
-- [`etc/systemd/system.conf.d/10-faster-shutdown.conf`](etc/systemd/system.conf.d/10-faster-shutdown.conf) — reduces `DefaultTimeoutStopSec` from 90s to 5s. T2 drivers occasionally hang during shutdown.
 
 ### WiFi
 
@@ -103,12 +91,12 @@ After setup, Orca will automatically use the natural piper voice. Test manually 
 spd-say -o piper-tts "hello world"
 ```
 
-### Fn+F3 toggle keybinding
+### F3 toggle keybinding
 
-Press **Fn+F3** to start Orca, press **Fn+F3** again to quit it. On T2 MacBooks, Fn+F3 sends `XF86LaunchA` (the Mission Control key). The setup script adds this binding to Hyprland automatically. To add it manually, append to `~/.config/hypr/bindings.conf`:
+Press **F3** to start Orca, press **F3** again to quit it. The setup script adds this binding to Hyprland automatically. To add it manually, append to `~/.config/hypr/bindings.conf`:
 
 ```
-bindd = , XF86LaunchA, Toggle Orca screen reader, exec, omarchy-toggle-orca
+bindd = , F3, Toggle Orca screen reader, exec, omarchy-toggle-orca
 ```
 
 ### Config files
@@ -127,21 +115,11 @@ Sources:
 
 | Feature | Status |
 |---|---|
-| T2 kernel + `apple-bce` | Handled by Omarchy |
-| `apple-bcm-firmware` for WiFi | Handled by Omarchy |
-| `hid_apple` + `usbhid` in mkinitcpio | Handled by Omarchy |
-| `pcie_ports=compat` boot param | Handled by Omarchy |
-| `intel_iommu=on iommu=pt` | Handled by Omarchy |
-| `brcmfmac feature_disable=0x82000` | Handled by Omarchy |
-| F-key behavior (`fnmode=2`) | Handled by Omarchy |
-| USB autosuspend disable | Handled by Omarchy |
-| Fan daemon (`t2fanrd`) | Handled by Omarchy (default config) |
-| Custom fan curve | Done (this repo) |
-| Webcam via `facetimehd` driver | Done (this repo) |
-| WiFi resume hook (reload `brcmfmac` after suspend) | Done (this repo) |
-| Keyboard backlight 10% step size | Done (this repo) |
-| Auto power profile (performance/power-saver) | Done (this repo) |
-| Natural voice screen reader (Orca + Piper TTS) | Done (this repo) |
+| Custom fan curve | Done |
+| WiFi resume hook (reload `brcmfmac` after suspend) | Done |
+| Keyboard backlight 10% step size | Done |
+| Auto power profile (performance/power-saver) | Done |
+| Natural voice screen reader (Orca + Piper TTS) | Done |
 | Suspend/wake black screen fix | **Not solved** (open issue) |
 
 ## Open Issues
